@@ -19,7 +19,6 @@ tests/value/widen_on_non_monotonic.i:58:[kernel] warning: Calling undeclared fun
         Called from tests/value/widen_on_non_monotonic.i:71.
 tests/value/widen_on_non_monotonic.i:25:[value] entering loop for the first time
 tests/value/widen_on_non_monotonic.i:23:[value] entering loop for the first time
-tests/value/widen_on_non_monotonic.i:26:[value] entering loop for the first time
 tests/value/widen_on_non_monotonic.i:27:[value] warning: signed overflow. assert -2147483648 ≤ b - 1;
 [value] Recording results for main1
 [value] Done for function main1

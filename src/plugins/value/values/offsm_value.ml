@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2017                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -63,7 +63,8 @@ let basic_paste ?(start=Int.zero) ~src ~size_src dst =
 let basic_find ?(start=Int.zero) ~size o =
   let validity = enough_validity ~start ~size in
   let offsets = Ival.inject_singleton start in
-  snd (V_Offsetmap.find ~validity ~offsets ~size o)
+  let _, v = V_Offsetmap.find ~validity ~offsets ~size o in
+  V_Or_Uninitialized.map (fun v -> fst (V.cast ~signed:false ~size v)) v
 
 (* Paste [v] of size [size] at position [start] in [o] *)
 let basic_add ?(start=Int.zero) ~size v o =
@@ -92,8 +93,8 @@ let read_bit o bit =
     | false, false (* bottom *) -> `Zero
   with V.Not_based_on_null -> `ZeroOne
 
-(** Decompose the range [b..e] (inclusive) of [a] into ranges of consecutive
-    equal bits. Raise [NotConstant] if [o] is not constant on this range. *)
+(** Decompose the range [b..e] (inclusive) of [o] into ranges of consecutive
+    equal bits. *)
 let explode_range o (b, e) =
   (* result. only [b..e] will be modified *)
   let r = ref o in
@@ -128,7 +129,7 @@ let explode_range o (b, e) =
 let explode o =
   let r = ref o in
   let aux (e, b) _ =
-    r := explode_range o (Integer.to_int e, Integer.to_int b)
+    r := explode_range !r (Integer.to_int e, Integer.to_int b)
   in
   V_Offsetmap.iter aux o;
   List.rev (V_Offsetmap.fold (fun r v acc -> (r, v) :: acc) !r [])
@@ -199,11 +200,22 @@ let map2 f o1 o2 =
 
 (** Bitwise, pointwise operations *)
 
+(* This function detects if the [size] first bits of [(v, _size_v, off)] are
+   all set to zero.
+   TODO: currently, we make no attempt to return a precise answer when
+   [v] is not zero, but its restriction to [size] bits with [off] offset
+   would be. *)
 let is_zero =
   let zero = V_Or_Uninitialized.initialized V.singleton_zero in
-  (fun v -> V_Or_Uninitialized.equal zero v)
+  (fun _size (v, _size_v, _off) -> V_Or_Uninitialized.equal zero v)
 
-let is_all_ones size v =
+(* This function detects if the [size] first bits of [(v, _size_v, off)] are
+   all set to one.
+   TODO: currently, we make no attempt to return a precise answer when
+   [off] is not [zero]. Also, we could improve the function by not creating
+   V_Or_Uninitialized values, and instead directly reasoning on Ival. *)
+let is_all_ones size (v, _size_v, off) =
+  Rel.equal Rel.zero off &&
   let n = Int.(pred (two_power size)) in
   let one = V_Or_Uninitialized.initialized (V.inject_int n) in
   V_Or_Uninitialized.equal one v
@@ -216,17 +228,17 @@ let lift f length (vv1: offsm_range) (vv2: offsm_range): offsm_range =
 let same_concr (v1, _, _ as vv1: offsm_range) (vv2: offsm_range) =
   equal_offsm_range vv1 vv2 && V_Or_Uninitialized.cardinal_zero_or_one v1
 
-let aux_or (b, e) (v1,_,_ as vv1: offsm_range) (v2,_,_ as vv2: offsm_range) =
+let aux_or (b, e) (vv1: offsm_range) (vv2: offsm_range) =
   let size = Int.length b e in
-  if is_zero v1 || is_all_ones size v2 || same_concr vv1 vv2 then vv2
-  else if is_zero v2 || is_all_ones size v1 then vv1
+  if is_zero size vv1 || is_all_ones size vv2 || same_concr vv1 vv2 then vv2
+  else if is_zero size vv2 || is_all_ones size vv1 then vv1
   else
     lift V.bitwise_or size vv1 vv2
 
-let aux_and (b, e) (v1,_,_ as vv1: offsm_range) (v2,_,_ as vv2: offsm_range) =
+let aux_and (b, e) (vv1: offsm_range) (vv2: offsm_range) =
   let size = Int.length b e in
-  if is_zero v1 || is_all_ones size v2 || same_concr vv1 vv2 then vv1
-  else if is_zero v2 || is_all_ones size v1 then vv2
+  if is_zero size vv1 || is_all_ones size vv2 || same_concr vv1 vv2 then vv1
+  else if is_zero size vv2 || is_all_ones size vv1 then vv2
   else
     (*TODO: this ~signed may be dangerous if for some reason we get two values
       of inverse sign. extract_bits generate always positive integers, which
@@ -236,10 +248,10 @@ let aux_and (b, e) (v1,_,_ as vv1: offsm_range) (v2,_,_ as vv2: offsm_range) =
     lift f size vv1 vv2
 
 (* O is neutral for xor, and  v ^ v = 0 *)
-let aux_xor (b, e) (v1,_,_ as vv1: offsm_range) (v2,_,_ as vv2: offsm_range) =
+let aux_xor (b, e) (vv1: offsm_range) (vv2: offsm_range) =
   let size = Int.length b e in
-  if is_zero v1 then vv2
-  else if is_zero v2 then vv1
+  if is_zero size vv1 then vv2
+  else if is_zero size vv2 then vv1
   else if same_concr vv1 vv2 then
     (V_Or_Uninitialized.initialized V.singleton_zero, Int.one, Rel.zero)
   else lift V.bitwise_xor size vv1 vv2
@@ -391,7 +403,7 @@ module Offsm : Abstract_value.Internal with type t = offsm_or_top = struct
   let narrow o1 o2 = match o1, o2 with
     | Top, o | o, Top -> `Value o
     | O o1, O o2 ->
-      V_Offsetmap.narrow o1 o2 >>-: (fun o -> O o)
+      V_Offsetmap.narrow_reinterpret o1 o2 >>-: (fun o -> O o)
 
   (* Simple values cannot be injected because we do not known their type
      (hence size in bits *)

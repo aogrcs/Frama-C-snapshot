@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2017                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -551,18 +551,19 @@ struct
       Varinfo.Set.empty
 
   (** Term utility:
-      Extract C local variables occuring into a [term]. *)
+      Extract C local variables occurring into a [term]. *)
   let extract_locals_from_term term =
     extract_locals (extract_free_logicvars_from_term term)
 
   (** Predicate utility:
-      Extract C local variables occuring into a [term]. *)
+      Extract C local variables occurring into a [term]. *)
   let extract_locals_from_pred pred =
     extract_locals (extract_free_logicvars_from_predicate pred)
 
   type abs_label = | AbsLabel_here
                    | AbsLabel_pre
                    | AbsLabel_post
+                   | AbsLabel_init
                    | AbsLabel_stmt of stmt
 
   let is_same_label absl l =
@@ -571,6 +572,7 @@ struct
       | AbsLabel_here, LogicLabel (_, "Here") -> true
       | AbsLabel_pre, LogicLabel (_, "Pre") -> true
       | AbsLabel_post, LogicLabel (_, "Post") -> true
+      | AbsLabel_init, LogicLabel (_, "Init") -> true
       | _ -> false
 
 
@@ -613,6 +615,7 @@ struct
           | AbsLabel_pre -> get_fct_entry_point ()
           | AbsLabel_here -> get_ctrl_point true
           | AbsLabel_post -> get_ctrl_point false
+          | AbsLabel_init -> raise (NYI "[logic_interp] Init label")
         in (* TODO: the method should be able to return result directly *)
         match result with
         | current_before, Some current_stmt -> current_before, current_stmt
@@ -635,16 +638,16 @@ struct
           match ki_opt,before_opt with
             (* function contract *)
           | None,Some true -> 
-	    failwith "The use of the label Old is forbiden inside clauses \
-        related the pre-state of function contracts." 
+	    failwith "The use of the label Old is forbidden inside clauses \
+        related to the pre-state of function contracts." 
           | None,None
           | None,Some false -> 
 	    (* refers to the pre-state of the contract. *)
 	    self#change_label AbsLabel_pre x 
           (* statement contract *)
           | Some (_ki,false),Some true  -> 
-	    failwith "The use of the label Old is forbiden inside clauses \
-related the pre-state of statement contracts."
+	    failwith "The use of the label Old is forbidden inside clauses \
+related to the pre-state of statement contracts."
           | Some (ki,false),None
           | Some (ki,false),Some false  -> 
 	    (* refers to the pre-state of the contract. *)
@@ -662,20 +665,20 @@ related the pre-state of statement contracts."
             (* function contract *)
           | None,Some _ -> 
 	    failwith "Function contract where the use of the label Post is \
- forbiden."
+ forbidden."
           | None,None -> 
 	    (* refers to the post-state of the contract. *)
 	    self#change_label AbsLabel_post x 
           (* statement contract *)
           | Some (_ki,false),Some _  -> 
 	    failwith "Statement contract where the use of the label Post is \
-forbiden."
+forbidden."
           | Some (_ki,false),None -> 
 	    (* refers to the pre-state of the contract. *)
 	    self#change_label AbsLabel_post x 
           (* code annotation *)
           | Some (_ki,true), _ -> 
-	    failwith "The use of the label Post is forbiden inside code \
+	    failwith "The use of the label Post is forbidden inside code \
 annotations."
 
       method private change_label_to_pre: 'a.'a -> 'a visitAction =
@@ -683,7 +686,7 @@ annotations."
           match ki_opt with
             (* function contract *)
           | None -> 
-	    failwith "The use of the label Pre is forbiden inside function \
+	    failwith "The use of the label Pre is forbidden inside function \
 contracts."
           (* statement contract *)
           (* code annotation *)
@@ -691,13 +694,16 @@ contracts."
 	    (* refers to the pre-state of the function contract. *)
 	    self#change_label AbsLabel_pre x 
 
+      method private change_label_to_init: 'a.'a -> 'a visitAction =
+        fun x -> self#change_label AbsLabel_init x 
+
       method private change_label_to_stmt: 'a.stmt -> 'a -> 'a visitAction =
         fun stmt x ->
           match ki_opt with
             (* function contract *)
           | None -> 
-	    failwith "the use of C labels is forbiden inside clauses related \
-function contracts."
+	    failwith "the use of C labels is forbidden inside clauses related \
+to function contracts."
           (* statement contract *)
           (* code annotation *)
           | Some _ -> 
@@ -715,6 +721,7 @@ function contracts."
       | Pat (_, LogicLabel (_,"Here")) -> self#change_label_to_here p
       | Pat (_, LogicLabel (_,"Pre")) -> self#change_label_to_pre p
       | Pat (_, LogicLabel (_,"Post")) -> self#change_label_to_post p
+      | Pat (_, LogicLabel (_,"Init")) -> self#change_label_to_init p
       | Pat (_, StmtLabel st) -> self#change_label_to_stmt !st p
       | Pat (_, LogicLabel (_,s)) ->
           failwith ("unknown logic label" ^ s)
@@ -775,6 +782,7 @@ function contracts."
           | Tat (_, LogicLabel (_,"Here")) -> self#change_label_to_here t
           | Tat (_, LogicLabel (_,"Pre")) -> self#change_label_to_pre t
           | Tat (_, LogicLabel (_,"Post")) -> self#change_label_to_post t
+          | Tat (_, LogicLabel (_,"Init")) -> self#change_label_to_init t
           | Tat (_, StmtLabel st) -> self#change_label_to_stmt !st t
           | Tat (_, LogicLabel (_,s)) ->
             failwith ("unknown logic label" ^ s)

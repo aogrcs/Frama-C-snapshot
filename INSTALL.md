@@ -122,7 +122,7 @@ General Mac OS tools for OCaml:
 
     xcode-select --install
     open http://brew.sh
-    brew install git autoconf meld opam
+    brew install git autoconf meld opam gmp
 
 Graphical User Interface:
 
@@ -130,9 +130,8 @@ Graphical User Interface:
     brew install gtksourceview libgnomecanvas graphviz
     opam install lablgtk ocamlgraph
 
-Recommended for Frama-C:
+Required for Frama-C:
 
-    brew install gmp
     opam install zarith
 
 Necessary for Frama-C/WP:
@@ -174,11 +173,11 @@ If you are using Fedora >= 13 then a Frama-C package is provided:
 
 ### Quick Start
 
-1. Install OCaml, OCamlfind and OCamlGraph if not already installed. Note
-   that OCaml >= 4.02.3 is needed in order to compile Frama-C
+1. Install OCaml, OCamlfind, OCamlGraph and Zarith if not already installed.
+   Note that OCaml >= 4.02.3 is needed in order to compile Frama-C.
 
 2. (Optional) For the GUI, also install Gtk, GtkSourceView, GnomeCanvas and
-   Lablgtk2 if not already installed. If possible, also install Zarith.
+   Lablgtk2 if not already installed.
    See section 'REQUIREMENTS' below for indications on the names of the
    packages to install, or use 'opam depext' as explained in section 'Opam'
    above.
@@ -210,15 +209,13 @@ If you are using Fedora >= 13 then a Frama-C package is provided:
 - a C compiler with standard C and POSIX headers and libraries
 - [OCamlGraph][OCamlGraph] >= 1.8.5
 - [findlib][findlib] >= 1.6.1
+- [Zarith][Zarith]
 
 The Frama-C GUI also requires:
 - Gtk (>= 2.4)
 - GtkSourceView 2.x
 - GnomeCanvas 2.x
 - LablGtk >= 2.18.2
-
-If [Zarith][Zarith] is installed, it will be used by Frama-C.
-Otherwise another equivalent but less efficient library will be used.
 
 Plugins may have their own requirements.
 Consult their specific documentations for details.

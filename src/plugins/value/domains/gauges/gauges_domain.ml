@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2017                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -36,6 +36,10 @@ type function_calls =
   (* Same as IntraproceduralAll, but only on non-global variables that
      are not referenced. Those variables cannot be modified by a callee,
      so this analysis is sound. Good for memexec. *)
+
+(* Silence warning *)
+let () = ignore
+    [FullInterprocedural; IntraproceduralAll; IntraproceduralNonReferenced]
 
 let function_calls_handling = ref IntraproceduralNonReferenced
 
@@ -152,7 +156,7 @@ module G = struct
     let zero = Some Integer.zero, Some Integer.zero
 
     (* Widening between two bounds. Unstable bounds are widened to infty
-       agressively. This widening does not assumes that [is_included i1 i2]
+       aggressively. This widening does not assumes that [is_included i1 i2]
        holds, unlike the widening of Ival. *)
     let widen ?threshold (min1, max1: t) (min2, max2: t) : t =
       let widen_unstable_min b1 b2 =
@@ -303,7 +307,7 @@ module G = struct
 
   (* A MV contains, for interesting variables, the coefficient that is
      associated to one lambda, represented as an integer interval.
-     Missign coefficients are 0. *)
+     Missing coefficients are 0. *)
   module MC = struct
 
     include Hptmap.Make(Base)(Bounds)(Hptmap.Comp_unused)
@@ -351,7 +355,7 @@ module G = struct
 
   (* This function takes two mv, and 'subtracts' them for the [inc]
      operation of gauges. More precisely, for each base present in both maps,
-     we substract pointwise the min and max or their possible values.
+     we subtract pointwise the min and max or their possible values.
      This is used to compute the 'difference' during one loop iteration. *)
   let sub_mv =
     let cache = cache_name "sub_mv" in
@@ -422,7 +426,7 @@ module G = struct
       if c = 0 then MC.compare i1.coeffs i2.coeffs
       else c
 
-    let equal i1 i2 =
+    let _equal i1 i2 =
       Bounds.equal i1.nb i2.nb && MC.equal i1.coeffs i2.coeffs
 
     let hash i = Bounds.hash i.nb + 17 * MC.hash i.coeffs
@@ -563,7 +567,7 @@ module G = struct
   let join_same_lambda =
     let cache = cache_name "join_same_lambda" in
     let decide _ v1 v2 =
-      (* Forbid muliple pointers in the result *)
+      (* Forbid multiple pointers in the result *)
       try
         let b1, _i1 = Cvalue.V.find_lonely_key v1 in
         let b2, _i2 = Cvalue.V.find_lonely_key v2 in
@@ -1078,20 +1082,11 @@ module D_Impl : Abstract_domain.S_with_Structure
     List.fold_left remove_variable state vars
 
   let leave_scope _kf vars state =
-    (* reverts implicity to Top *)
+    (* reverts implicitly to Top *)
     remove_variables vars state
 
 
   type origin = unit
-
-  type return = unit (* YYY: it may be useful to return a gauge here *)
-  module Return = Datatype.Unit
-
-  let top_return =
-    let top_value =
-      { v = `Value Cvalue.V.top; initialized = false; escaping = true }
-    in
-    Some (top_value, ())
 
   let approximate_call kf state =
     let post_state =
@@ -1105,7 +1100,7 @@ module D_Impl : Abstract_domain.S_with_Structure
         | IntraproceduralAll -> state (* unsound here *)
         | IntraproceduralNonReferenced -> state
     in
-    `Value [{ post_state; return = top_return }]
+    `Value [ post_state ]
 
   module Transfer (Valuation:
                      Abstract_domain.Valuation with type value = value
@@ -1113,7 +1108,6 @@ module D_Impl : Abstract_domain.S_with_Structure
                                                 and type loc = location)
     : Abstract_domain.Transfer
       with type state = state
-       and type return = unit
        and type value = value
        and type location = location
        and type valuation = Valuation.t
@@ -1121,7 +1115,6 @@ module D_Impl : Abstract_domain.S_with_Structure
     type value = Cvalue.V.t
     type state = G.t
     type location = Precise_locs.precise_location
-    type return = unit
     type valuation = Valuation.t
 
     let update _valuation st = st (* TODO? *)
@@ -1182,8 +1175,6 @@ module D_Impl : Abstract_domain.S_with_Structure
     let assume _ _ _ valuation state =
       `Value (Valuation.fold (assume_exp valuation) valuation state)
 
-    let make_return _kf _stmt _assign _valuation _state = ()
-
     let finalize_call _stmt _call ~pre ~post =
       let state =
         match !function_calls_handling with
@@ -1192,9 +1183,6 @@ module D_Impl : Abstract_domain.S_with_Structure
         | IntraproceduralAll -> pre (* unsound here *)
       in
       `Value state
-
-    let assign_return _stmt lv _kf () value _valuation state =
-      imprecise_assign lv value state
 
     let start_call _stmt call valuation state =
       let state =
@@ -1224,7 +1212,7 @@ module D_Impl : Abstract_domain.S_with_Structure
       let state = List.fold_left aux_arg state call.arguments in
       Compute (Continue state, true)
 
-    let default_call _stmt call state =
+    let approximate_call _stmt call state =
       let kf = call.kf in
       let name = Kernel_function.get_name kf in
       if  Ast_info.is_frama_c_builtin name then begin
@@ -1238,14 +1226,14 @@ module D_Impl : Abstract_domain.S_with_Structure
       end;
       approximate_call kf state
 
-    let enter_loop = G.enter_loop
-    let incr_loop_counter _ = G.inc
-    let leave_loop = G.leave_loop
-
   end
 
-  let compute_using_specification _ (kf, _) state =
-    approximate_call kf state
+  let enter_loop = G.enter_loop
+  let incr_loop_counter _ = G.inc
+  let leave_loop = G.leave_loop
+
+  let compute_using_specification _ call _spec state =
+    approximate_call call.kf state
 
   (* TODO: it would be interesting to return something here, but we
      currently need a valuation to perform the translation. *) 

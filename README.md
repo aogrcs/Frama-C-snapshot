@@ -1,4 +1,4 @@
-![Frama-C](share/frama-c.gif?raw=true)
+![Frama-C](share/frama-c.png?raw=true)
 
 [Frama-C](http://frama-c.com) is a platform dedicated to the analysis of
 source code written in C.

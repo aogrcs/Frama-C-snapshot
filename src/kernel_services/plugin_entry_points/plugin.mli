@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2017                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -126,7 +126,7 @@ val plugin_subpath: string -> unit
 
 val default_msg_keys: string list -> unit
 (** Debug message keys set by default for the plugin.
-    @since Frama-C+dev *)
+    @since Silicon-20161101 *)
 
 (* ************************************************************************* *)
 (** {2 Handling plugins} *)

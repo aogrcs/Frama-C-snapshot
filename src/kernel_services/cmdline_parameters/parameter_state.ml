@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2017                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -211,16 +211,22 @@ struct
 
   let force_set x =
     let old = Internal_state.get () in
-    if projectify then begin
-      (* [JS 2009/05/25] first clear the dependency and next apply the hooks
-         since these hooks may set some states in the dependencies *)
-      let selection =
-        State_selection.diff
-          (State_selection.with_dependencies self)
-          (State_selection.singleton Is_set.self)
-      in
-      Project.clear ~selection ()
-    end;
+    (* First clear the dependency and next apply the hooks since these hooks may
+       set some states in the dependencies. Even do so for unprojectifed options
+       since they actually use the project system (in a fake way, see module
+       {!Options_state_builder}) and could have some dependencies that must be
+       kept consistent. *)
+    let selection =
+      State_selection.diff
+        (State_selection.with_dependencies self)
+        (State_selection.singleton Is_set.self)
+    in
+    (try Project.clear ~selection ()
+     with Project.NoProject ->
+       (* unprojectified early options can be set even before creating the
+          initial project. Do nothing for these ones: consistency will be
+          automatically ensured when creating the initial project. *)
+       assert (not projectify));
     Internal_state.set x;
     Set_hook.apply (old, x)
 

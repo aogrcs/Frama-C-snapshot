@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2017                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -55,12 +55,18 @@ val clobbered_set_from_ret: Cvalue.Model.t -> Cvalue.V.t -> Base.SetLattice.t
     [kind] is used to describe the alarm, similarly to [Alarms.get_name].
     Identical alarms are not re-emitted. Returns [true] iff it is a new alarm.
 
-    @modify Aluminium-20160501+dev change return type *)
+    @modify Silicon-20161101 change return type *)
 val emit_alarm: kind:string -> text:string -> bool
 
 (** Iteration on special assertions built by the builtins *)
 val fold_emitted_alarms:
   (Cil_types.stmt -> Cil_datatype.Code_annotation.Set.t -> 'a -> 'a) -> 'a -> 'a
+
+(** Emits warnings for each function definition that will be overridden by an
+    EVA built-in.
+    Does not include definitions in the Frama-C stdlib.
+    @since Phosphorus-20170501-beta1 *)
+val warn_definitions_overridden_by_builtins: unit -> unit
 
 (*
 Local Variables:

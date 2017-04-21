@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2017                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -79,7 +79,7 @@ type 'a offsetmap =
             * otherwise, two truncated instances of the value are stored
               consecutively.
           - strictly less than [max+1]: the value is stored more than once,
-            and implictly repeats itself to fill the entire interval. *) *
+            and implicitly repeats itself to fill the entire interval. *) *
     int
       (** tag: hash-consing id of the node, plus an additional boolean.
           Not related to the contents of the tree. *)
@@ -108,7 +108,7 @@ module Make (V : module type of Offsetmap_lattice_with_isotropy) = struct
       case it is sometimes necessary to return Empty. In the current
       implementation, sizes 0 are handled by the outer (exported) functions,
       while the inner functions assume that the arguments [size] are
-      stricty positive. *)
+      strictly positive. *)
 
   let equal (t1:V.t offsetmap) (t2:V.t offsetmap) = t1 == t2
 
@@ -376,10 +376,10 @@ module Make (V : module type of Offsetmap_lattice_with_isotropy) = struct
   ;;
 
 
-  type 'a zipper =
+  type zipper =
     | End
-    | Right of Integer.t * 'a offsetmap * 'a zipper
-    | Left of Integer.t * 'a offsetmap * 'a zipper;;
+    | Right of Integer.t * t * zipper
+    | Left of Integer.t * t * zipper;;
   (** Zippers : Offset of a node * Node * continuation of the zipper *)
 
   exception End_reached;;
@@ -459,10 +459,10 @@ module Make (V : module type of Offsetmap_lattice_with_isotropy) = struct
    | Empty -> assert false
   ;;
 
- type 'a imp_zipper = {
+ type imp_zipper = {
    mutable offset: Integer.t;
-   mutable node: 'a offsetmap;
-   mutable zipper: 'a zipper;
+   mutable node: t;
+   mutable zipper: zipper;
  };;
 
  let imp_move_right imp_z =
@@ -746,7 +746,7 @@ module Make (V : module type of Offsetmap_lattice_with_isotropy) = struct
 
  (** Inclusion functions *)
 
- (* Auxiliary fonction for inclusion: check that, between [mabs_min] and
+ (* Auxiliary function for inclusion: check that, between [mabs_min] and
     [mabs_max], the values (r1, m1, v1) and (r2, m2, v2), respectively
     bound between (amin1, amax1) and (amin2, amax2), are included. *)
  let is_included_nodes_values (amin1 : Integer.t) (amax1 : Integer.t) r1 m1 v1 amin2 amax2 r2 m2 v2 mabs_min mabs_max =
@@ -1117,19 +1117,19 @@ module Make (V : module type of Offsetmap_lattice_with_isotropy) = struct
  ;;
 
 
- (** Auxiliary function to join 2 trees with merge. The merge on two values
-     is done by [merge_v]. Since this function can be [V.widen], the
-     left/right order of arguments must be preserved. *)
- let f_aux_merge merge_v abs_min abs_max rem1 modu1 v1 rem2 modu2 v2 =
+ (** Auxiliary function to join 2 trees with {!merge} above. The merge on two
+     values is done by [merge_v]. Since this function can be [V.widen], the
+     left/right order of arguments must be preserved. When [merge_v] is
+     narrow, it is important that [extract_bits_and_stitch] be canonical
+     enough -- or that {!V.narrow} handles differences in representations
+     soundly. *)
+ let f_aux_merge_generic merge_v abs_min abs_max rem1 modu1 v1 rem2 modu2 v2 =
+   if rem1 =~ rem2 && modu1 =~ modu2
+   then
+     rem1, modu1, V.anisotropic_cast modu1 (merge_v modu1 v1 v2)
  (*  Format.printf "f_aux_merge: [%a, %a]@.(%a %a %a)@.(%a %a %a)@."
      pretty_int abs_min pretty_int abs_max pretty_int rem1 pretty_int
      modu1 V.pretty v1 pretty_int rem2 pretty_int modu2 V.pretty v2 ; *)
-   let joined size v1 v2 = V.anisotropic_cast size (merge_v size v1 v2) in
-   if (rem1 =~ rem2 && modu1 =~ modu2) || V.is_isotropic v2
-   then
-     rem1, modu1, joined modu1 v1 v2
-   else if V.is_isotropic v1 then
-     rem2, modu2, joined modu2 v1 v2
    else
      let topify = Origin.K_Merge in
      let offset = abs_min in
@@ -1155,12 +1155,49 @@ module Make (V : module type of Offsetmap_lattice_with_isotropy) = struct
      rem, size, merge_v size v1' v2'
  ;;
 
+ (* similar to [f_aux_merge_generic], but we perform a reinterpretation in
+    all cases. This is to ensure that [V.narrow] can be applied soundly. *)
+ let f_aux_merge_narrow merge_v abs_min abs_max rem1 modu1 v1 rem2 modu2 v2 =
+   let topify = Origin.K_Merge in
+   let offset = abs_min in
+   let size = Integer.length abs_min abs_max in
+   let rem = abs_min %~ size in
+   let v1' =
+     extract_bits_and_stitch ~topify ~conflate_bottom:false
+       ~offset ~size offset (rem1, modu1, v1) abs_max V.merge_neutral_element
+   in
+   let v2' =
+     extract_bits_and_stitch ~topify ~conflate_bottom:false
+       ~offset ~size offset (rem2, modu2, v2) abs_max V.merge_neutral_element
+   in
+   rem, size, (merge_v size v1' v2': v)
+ ;;
+
+ 
+ (** More efficient version of {!f_aux_merge_generic}, specialized for
+     join-like functions. When one of the values is isotropic, we do not
+     concretize the other one with {!extract_stitch_and_bits}. Instead,
+     we implicitly "extend" the isotropic value to the full range,
+     and merge on the whole range. This does not work with narrow, because
+     [narrow {0} {1,2}] on the first bit is {0}, but the intersection
+     of the two sets is bottom. *)
+ let f_aux_merge_join merge_v abs_min abs_max rem1 modu1 v1 rem2 modu2 v2 =
+   let joined size v1 v2 = V.anisotropic_cast size (merge_v size v1 v2) in
+   if V.is_isotropic v2 then
+     rem1, modu1, joined modu1 v1 v2
+   else if V.is_isotropic v1 then
+     rem2, modu2, joined modu2 v1 v2
+   else
+     f_aux_merge_generic merge_v abs_min abs_max rem1 modu1 v1 rem2 modu2 v2
+ ;;
+
+ 
  module JoinCache = Binary_cache.Symmetric_Binary(Cacheable)(Cacheable)
  let () = clear_caches_ref := JoinCache.clear :: !clear_caches_ref;;
 
  (** Joining two trees that cover the same range *)
  let join t1 t2 =
-   let f_join = f_aux_merge (fun _size v1 v2 -> V.join v1 v2) in
+   let f_join = f_aux_merge_join (fun _size v1 v2 -> V.join v1 v2) in
    let rec aux_cache t1 t2 =
      if Cacheable.equal t1 t2 then t1
      else JoinCache.merge (merge aux_cache f_join) t1 t2
@@ -1176,7 +1213,10 @@ module Make (V : module type of Offsetmap_lattice_with_isotropy) = struct
  struct
 
    module NarrowCache = Binary_cache.Symmetric_Binary(Cacheable)(Cacheable)
-   let () = clear_caches_ref := NarrowCache.clear :: !clear_caches_ref;;
+   module NarrowReinterpretCache =
+     Binary_cache.Symmetric_Binary(Cacheable)(Cacheable)
+   let () = clear_caches_ref :=
+       NarrowReinterpretCache.clear :: NarrowCache.clear :: !clear_caches_ref;;
 
    let is_top = function
      | Node (_, _, Empty, _, Empty, _ , _, v, _) -> V.equal v X.top
@@ -1184,7 +1224,7 @@ module Make (V : module type of Offsetmap_lattice_with_isotropy) = struct
 
    (** Narrowing two trees that cover the same range *)
    let narrow t1 t2 =
-     let f_join = f_aux_merge (fun _size v1 v2 -> X.narrow v1 v2) in
+     let f_join = f_aux_merge_generic (fun _size v1 v2 -> X.narrow v1 v2) in
      let rec aux_cache t1 t2 =
        if Cacheable.equal t1 t2 || is_top (snd t2) then t1
        else if is_top (snd t1) then t2
@@ -1193,6 +1233,18 @@ module Make (V : module type of Offsetmap_lattice_with_isotropy) = struct
      let _, r = aux_cache (Integer.zero, t1) (Integer.zero, t2) in
      r
    ;;
+
+   let narrow_reinterpret t1 t2 =
+     let f_join = f_aux_merge_narrow (fun _size v1 v2 -> X.narrow v1 v2) in
+     let rec aux_cache t1 t2 =
+       if Cacheable.equal t1 t2 || is_top (snd t2) then t1
+       else if is_top (snd t1) then t2
+       else NarrowReinterpretCache.merge (merge aux_cache f_join) t1 t2
+     in
+     let _, r = aux_cache (Integer.zero, t1) (Integer.zero, t2) in
+     r
+   ;;
+
  end
 
  let join_and_is_included t1 t2 =
@@ -1206,7 +1258,7 @@ module Make (V : module type of Offsetmap_lattice_with_isotropy) = struct
      let v2 = if not (V.is_included v1 v2) then V.join v1 v2 else v2 in
      V.widen (size,wh) v1 v2
    in
-   let f_widen = f_aux_merge widen in
+   let f_widen = f_aux_merge_join widen in
    let rec aux t1 t2 =
      if Cacheable.equal t1 t2 then t1
      else merge aux f_widen t1 t2
@@ -1980,7 +2032,7 @@ let update_under ~validity ~exact ~offsets ~size v t =
         else
           (* This is a struct or an array. Either the result will be imprecise
              because catenating semi-imprecise values through merge_bits
-             wil result in something really imprecise at the end, or we will
+             will result in something really imprecise at the end, or we will
              build very big integers, which is not really helpful either. *)
           find_imprecise_between (Int.zero, Int.pred size) src
       in

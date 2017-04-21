@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2017                                               *)
 (*    CEA   (Commissariat à l'énergie atomique et aux énergies            *)
 (*           alternatives)                                                *)
 (*    INRIA (Institut National de Recherche en Informatique et en         *)
@@ -314,7 +314,7 @@ type code_annot =
   | APragma of lexpr Cil_types.pragma (** pragma. *)
   | AExtended of string list * extension
     (** extension in a loop annotation.
-        @since Frama-C+dev *)
+        @since Silicon-20161101 *)
 
 (** assignment performed by a C function. *)
 type assigns = lexpr Cil_types.assigns
@@ -344,7 +344,7 @@ type annot =
 (** ACSL extension for external spec file **)
 type ext_decl =
   | Ext_decl of decl            (* decl contains a location *)
-  | Ext_macro of string * lexpr (* lexpr contains a location *)
+  | Ext_macro of bool * string * lexpr (* lexpr contains a location *)
   | Ext_include of bool * string * location
 
 type ext_function = 

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2017                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -33,7 +33,7 @@ val default : unit -> t
 val join: t -> t -> t
 
 (**  Pretty-prints a set of hints (for debug purposes only).
-     @since Aluminium-20160501+dev *)
+     @since Silicon-20161101 *)
 val pretty : Format.formatter -> t -> unit
 
 (** Define numeric hints for one or all variables ([None]),

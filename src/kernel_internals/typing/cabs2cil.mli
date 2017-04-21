@@ -75,7 +75,7 @@ val register_new_global_hook: (Cil_types.varinfo -> bool -> unit) -> unit
     corresponding to the global, while the boolean is [true] iff [vi] was
     already existing (it is [false] if this is the first declaration/definition
     of [vi] in the file).
-    @since Frama-C+dev
+    @since Silicon-20161101
  *)
 
 (** new hook called when encountering a definition of a local function. The hook
@@ -144,6 +144,10 @@ val convFile: Cabs.file -> Cil_types.file
     from disappearing. It can be removed whenever block contracts have been
     processed. *)
 val frama_c_keep_block: string
+
+(** Name of the attribute used to store the function that should be called
+    when the corresponding variable exits its scope. *)
+val frama_c_destructor: string
 
 (** A hook into the code that creates temporary local vars.  By default this
   is the identity function, but you can overwrite it if you need to change the
@@ -263,12 +267,19 @@ val compatibleTypes: Cil_types.typ -> Cil_types.typ -> Cil_types.typ
     @since Oxygen-20120901
 *)
 
-val compatibleTypesp: Cil_types.typ -> Cil_types.typ -> bool
-(** Check that the two given types are compatible (C99, 6.2.7), and
-    return a boolean.
+val areCompatibleTypes: Cil_types.typ -> Cil_types.typ -> bool
+(** Check that the two given types are compatible (C99, 6.2.7)
 
     @since Neon-20140301
+    @modify Phosphorus-20170501-beta1
 *)
+
+val stmtFallsThrough: Cil_types.stmt -> bool
+(** returns [true] if the given statement can fall through the next
+    syntactical one.
+
+    @since Phosphorus-20170501-beta1 exported
+ *)
 
 (*
 Local Variables:

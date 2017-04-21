@@ -219,8 +219,6 @@ tests/value/gauges.i:191:[value] warning: out of bounds write. assert \valid(q);
 [value] Done for function main9
 [value] computing for function main10 <- main.
         Called from tests/value/gauges.i:311.
-[value] Call to builtin bzero(({{ (unsigned char *)&A }},{40}))
-[value] Call to builtin bzero(({{ (unsigned char *)&B }},{40}))
 [value] computing for function main10_aux <- main10 <- main.
         Called from tests/value/gauges.i:209.
 tests/value/gauges.i:199:[value] entering loop for the first time
@@ -484,8 +482,6 @@ tests/value/gauges.i:291:[value] warning: signed overflow. assert j + 1 ≤ 2147
 [from] Computing for function main10_aux
 [from] Done for function main10_aux
 [from] Computing for function main10
-[from] Computing for function Frama_C_bzero <-main10
-[from] Done for function Frama_C_bzero
 [from] Done for function main10
 [from] Computing for function main11
 [from] Done for function main11
@@ -533,9 +529,6 @@ tests/value/gauges.i:291:[value] warning: signed overflow. assert j + 1 ≤ 2147
 [from] Done for function main
 [from] ====== DEPENDENCIES COMPUTED ======
        These dependencies hold at termination for the executions that terminate:
-[from] Function Frama_C_bzero:
-  A[0..9] FROM \nothing (and SELF)
-  B[0..9] FROM \nothing (and SELF)
 [from] Function main0:
   NO EFFECTS
 [from] Function main0_bis:
